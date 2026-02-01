@@ -55,7 +55,8 @@ $LabelObject = [System.Windows.Forms.Label]
 $ButtonObject = [System.Windows.Forms.Button]
 $MessageBox = [System.Windows.Forms.MessageBox]
 
-$git_response = git status;
+# Avoid stderr noise when not inside a repo.
+$git_response = git status 2>$null
 
 $GitCheck = [GitCheck]::new()
 
@@ -70,6 +71,8 @@ if($Controller.NoRepo_Form_Result -eq "Cancel"){
 
     [System.Environment]::Exit(0)
 }
+
+$Controller.EnsureGitNicMetadata()
 
 $MainForm = [MainForm]::new($Controller, (Get-Location).Path)
 $MainForm.Form.Add_Shown({$MainForm.Form.Activate()})

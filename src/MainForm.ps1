@@ -325,13 +325,37 @@ class MainForm {
         if (-not $this.button_been_pressed) { return }
         if ($this.CurrentClickedSlot -match "Slot - ") { return }
 
-        $confirm = Show-GitNicMessageBox `
-            -Text "Are you sure you want to load this branch ?`nThis will overwrite your current working directory." `
-            -Caption "Confirm Load" `
-            -Buttons "YesNo" `
-            -Icon "Warning"
+        $statusOutput = $this.Controller.GitShell.GetStatus()
+        $deletedFiles = @()
+        $modifiedFiles = @()
+        if (-not [string]::IsNullOrWhiteSpace($statusOutput)) {
+            $statusLines = $statusOutput -split "`r?`n"
+            foreach ($line in $statusLines) {
+                if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                $status = $line.Substring(0, [Math]::Min(2, $line.Length)).Trim()
+                $path = $line.Substring([Math]::Min(3, $line.Length)).Trim()
+                if ($path -like ".gitnic*" -or $path -like ".gitnic\\*" -or $path -like ".gitnic/*") {
+                    continue
+                }
+                if ($status -eq "??") {
+                    $deletedFiles += $path
+                } else {
+                    $modifiedFiles += $path
+                }
+            }
+        }
 
-        if ($confirm.ToString() -ne 'Yes') { return }
+        $hasChanges = ($deletedFiles.Count -gt 0) -or ($modifiedFiles.Count -gt 0)
+        if ($hasChanges) {
+            $confirmForm = [Confirm_Form]::new(
+                $this.Controller,
+                "Confirm Load",
+                "Are you sure you want to load this branch ?`nThis will overwrite your current working directory.",
+                $deletedFiles,
+                $modifiedFiles
+            )
+            if ($confirmForm.Result -ne 'Yes') { return }
+        }
 
         $mainForm   = $this
         $slotText   = $this.CurrentClickedSlot   # e.g. "Save - 8 - 22NOV25"
@@ -356,21 +380,16 @@ class MainForm {
             return;
         }
 
-        if ($this.Controller.IsThereSomethingToCommit() -eq $False) {
-            Show-GitNicMessageBox `
-                -Text "There is nothing to commit" `
-                -Caption "No Changes Detected" `
-                -Buttons "OK" `
-                -Icon "Information" | Out-Null
-            return
-        }
-
         $branch_data = $this.CurrentClickedSlot -split " - "
         $branch_id   = [int]$branch_data[1]
 
         if ($this.branch_with_save_clicked) {
-            Show-GitNicMessageBox -Text "Do you want to overwrite ?" -Caption "Overwrite?" | Out-Null
-            return
+            $confirmForm = [Confirm_Form]::new(
+                $this.Controller,
+                "Overwrite?",
+                "Are you sure you want to overwrite this save?"
+            )
+            if ($confirmForm.Result -ne 'Yes') { return }
         }
 
         $mainForm   = $this

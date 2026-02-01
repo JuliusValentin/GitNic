@@ -42,35 +42,97 @@ Class GitShell {
     return $out.Trim()
 }
 
-[void] SetBranchDescription([string]$branchName, [string]$description) {
-
+[string] GetDescriptionsRoot() {
     $repoRoot = $this.GetRepoRoot()
-    if (-not $repoRoot) { return }
+    if (-not $repoRoot) { return $null }
+    return (Join-Path $repoRoot ".gitnic\\branch-descriptions")
+}
 
-    $metaDir = Join-Path $repoRoot ".git\magit-descriptions"
+[void] EnsureDescriptionsRoot() {
+    $metaDir = $this.GetDescriptionsRoot()
+    if (-not $metaDir) { return }
 
-    if (-not (Test-Path $metaDir)) {
-        New-Item -ItemType Directory -Path $metaDir | Out-Null
+    $rootDir = Split-Path -Parent $metaDir
+
+    if (-not (Test-Path $rootDir)) {
+        New-Item -ItemType Directory -Path $rootDir -Force | Out-Null
+        try {
+            $item = Get-Item -LiteralPath $rootDir -ErrorAction SilentlyContinue
+            if ($item) { $item.Attributes = $item.Attributes -bor [IO.FileAttributes]::Hidden }
+        } catch { }
     }
 
+    if (-not (Test-Path $metaDir)) {
+        New-Item -ItemType Directory -Path $metaDir -Force | Out-Null
+    }
+}
+
+[void] EnsureGitNicMetadata() {
+    $this.EnsureDescriptionsRoot()
+
+    $metaDir = $this.GetDescriptionsRoot()
+    if (-not $metaDir) { return }
+
+    $keepFile = Join-Path $metaDir ".keep"
+    if (-not (Test-Path $keepFile)) {
+        "GitNic metadata" | Set-Content -Path $keepFile -Encoding UTF8
+    }
+
+    try {
+        $status = $this.ExecuteGitCommand("status --short .gitnic")
+        if ([string]::IsNullOrWhiteSpace($status)) { return }
+    }
+    catch {
+        return
+    }
+
+    try { $this.ExecuteGitCommand("add .gitnic") } catch { }
+    try { $this.ExecuteGitCommand("commit -m `"GitNic: initialize metadata`" -- .gitnic") } catch { }
+}
+
+[void] CommitGitNicMetadata([string]$message = "GitNic: update description") {
+    try {
+        $status = $this.ExecuteGitCommand("status --short .gitnic")
+        if ([string]::IsNullOrWhiteSpace($status)) { return }
+    }
+    catch {
+        return
+    }
+
+    try { $this.ExecuteGitCommand("add .gitnic") } catch { }
+    try { $this.ExecuteGitCommand("commit -m `"$message`" -- .gitnic") } catch { }
+}
+
+[void] SetBranchDescription([string]$branchName, [string]$description) {
+
+    $this.EnsureDescriptionsRoot()
+    $metaDir = $this.GetDescriptionsRoot()
+    if (-not $metaDir) { return }
+
     $file = Join-Path $metaDir ($branchName + ".txt")
+    $parent = Split-Path -Parent $file
+    if (-not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
 
     # Save exactly what the user wrote
     $description | Set-Content -Path $file -Encoding UTF8
+
+    $this.CommitGitNicMetadata()
 }
 
     [string] GetBranchDescription([string]$branchName) {
 
-        $repoRoot = $this.GetRepoRoot()
-        if (-not $repoRoot) { return "" }
-
-        $metaDir = Join-Path $repoRoot ".git\magit-descriptions"
-        $file    = Join-Path $metaDir "$branchName.txt"
-
-        if (-not (Test-Path $file)) { return "" }
-
-        return Get-Content -Path $file -Raw -Encoding UTF8
+    $metaDir = $this.GetDescriptionsRoot()
+    if ($metaDir) {
+        $file = Join-Path $metaDir "$branchName.txt"
+        if (Test-Path $file) {
+            return Get-Content -Path $file -Raw -Encoding UTF8
+        }
     }
+
+    return ""
+}
 
     <# [void] SetBranchDescription([string]$branchName, [string]$description) {
 

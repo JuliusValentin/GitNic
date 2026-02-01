@@ -20,6 +20,11 @@ Class Controller {
         $this.GitShell.ExecuteGitCommand("init");
     }
 
+    [void] EnsureGitNicMetadata() {
+        if (-not $this.GitShell) { return }
+        $this.GitShell.EnsureGitNicMetadata()
+    }
+
     [string[]] GetBranches(){
 
         return $this.GitShell.GetGitBranches();

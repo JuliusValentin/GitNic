@@ -14,6 +14,12 @@ Class NoRepo_Frame{
         $noRepoForm.FormBorderStyle = 'FixedDialog'
         $noRepoForm.MaximizeBox     = $false
         $noRepoForm.MinimizeBox     = $true 
+        $noRepoForm.Add_Shown({
+            param($sender, $eventArgs)
+            $sender.TopMost = $true
+            $sender.Activate()
+            $sender.TopMost = $false
+        })
 
         $lbl_message1 = New-Object System.Windows.Forms.Label
         $lbl_message1.Text = "No git repository detected in the current directory:"
